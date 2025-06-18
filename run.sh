@@ -20,7 +20,21 @@ do
 
     # `git status --porcelain` is empty if the working directory is clean
     if [ -n "$(git status --porcelain)" ]; then
-        repos_with_unstaged_changes+=("$repo_dir")
+        # Get the date of the most recently modified unstaged file
+        latest_timestamp=$(git status --porcelain | while read -r status file; do
+            # Skip deleted files
+            if [[ ! "$status" =~ ^D ]]; then
+                stat -c "%Y" "$file" 2>/dev/null || echo "0"
+            fi
+        done | sort -rn | head -1)
+        
+        if [ "$latest_timestamp" != "0" ] && [ -n "$latest_timestamp" ]; then
+            latest_date=$(date -d "@$latest_timestamp" "+%Y-%m-%d")
+        else
+            latest_date=""
+        fi
+        
+        repos_with_unstaged_changes+=("$repo_dir|$latest_date")
     fi
 
     # Check if the repository has a main or master branch
@@ -60,6 +74,14 @@ if [ ${#repos_with_unstaged_changes[@]} -gt 0 ]; then
     echo
     echo "----------------------------------------"
     echo "Repositories with unstaged changes:"
-    printf "  - %s\n" "${repos_with_unstaged_changes[@]}"
+    for repo_info in "${repos_with_unstaged_changes[@]}"; do
+        repo_path="${repo_info%%|*}"
+        latest_date="${repo_info#*|}"
+        if [ -n "$latest_date" ] && [ "$latest_date" != "$repo_path" ]; then
+            printf "  - %s (latest change: %s)\n" "$repo_path" "$latest_date"
+        else
+            printf "  - %s (no date available)\n" "$repo_path"
+        fi
+    done
     echo "----------------------------------------"
 fi

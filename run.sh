@@ -56,9 +56,11 @@ do
             echo "Local branch $branch at $repo_dir is $ahead commit(s) ahead of $remote/$branch"
 
             # Confirm before pushing
-            read -p "Push changes to $remote/$branch? [y/n] " answer </dev/tty
-            if [[ $answer =~ ^[Yy]$ ]]
+            read -p "Push changes to $remote/$branch? [Y/n] " answer </dev/tty
+            if [[ $answer =~ ^[Nn]$ ]]
             then
+                echo "Skipping push to $remote/$branch"
+            else
                 git push "$remote" "$branch"
             fi
         fi

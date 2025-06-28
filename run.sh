@@ -24,12 +24,20 @@ do
         latest_timestamp=$(git status --porcelain | while read -r status file; do
             # Skip deleted files
             if [[ ! "$status" =~ ^D ]]; then
-                stat -c "%Y" "$file" 2>/dev/null || echo "0"
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    stat -f "%m" "$file" 2>/dev/null || echo "0"
+                else
+                    stat -c "%Y" "$file" 2>/dev/null || echo "0"
+                fi
             fi
         done | sort -rn | head -1)
         
         if [ "$latest_timestamp" != "0" ] && [ -n "$latest_timestamp" ]; then
-            latest_date=$(date -d "@$latest_timestamp" "+%Y-%m-%d")
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                latest_date=$(date -r "$latest_timestamp" "+%Y-%m-%d")
+            else
+                latest_date=$(date -d "@$latest_timestamp" "+%Y-%m-%d")
+            fi
         else
             latest_date=""
         fi

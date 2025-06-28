@@ -69,7 +69,7 @@ do
     # Go back to the parent directory to process the next repository
     cd "$parent_dir" || exit
 
-done < <(find "$parent_dir" -type d -name '.git' -print0)
+done < <(find -L "$parent_dir" -type d -name '.git' -print0)
 
 
 if [ ${#repos_with_unstaged_changes[@]} -gt 0 ]; then

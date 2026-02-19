@@ -58,8 +58,19 @@ do
 
     # Iterate over all remotes
     for remote in $(git remote); do
+        # Prompt to create the branch on remotes that don't have it yet
+        if ! git show-ref --verify --quiet "refs/remotes/$remote/$branch"; then
+            read -p "Remote $remote has no $branch branch. Push and create it? [y/N] " answer </dev/tty
+            if [[ $answer =~ ^[Yy]$ ]]; then
+                git push "$remote" "$branch"
+            else
+                echo "Skipping push to $remote/$branch"
+            fi
+            continue
+        fi
+
         # Check if the branch is ahead of the remote branch
-        ahead=$(git rev-list --count "$remote/$branch..$branch" 2>/dev/null)
+        ahead=$(git rev-list --count "$remote/$branch..$branch")
         if [ "$ahead" -ne 0 ]; then
             echo "Local branch $branch at $repo_dir is $ahead commit(s) ahead of $remote/$branch"
 

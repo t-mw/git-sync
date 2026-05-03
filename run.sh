@@ -189,7 +189,6 @@ done < <(find -L "$parent_dir" -type d -name '.git' -print0)
 
 if [ ${#repos_with_unstaged_changes[@]} -gt 0 ]; then
     echo
-    say "${yellow}----------------------------------------${reset}"
     say "${bold}${yellow}Repositories with unstaged changes:${reset}"
     for repo_info in "${repos_with_unstaged_changes[@]}"; do
         repo_path="${repo_info%%|*}"
@@ -200,17 +199,14 @@ if [ ${#repos_with_unstaged_changes[@]} -gt 0 ]; then
             printf "  ${yellow}-${reset} ${cyan}%s${reset} ${dim}(no date available)${reset}\n" "$repo_path"
         fi
     done
-    say "${yellow}----------------------------------------${reset}"
 fi
 
 if [ ${#repos_with_skipped_remotes[@]} -gt 0 ]; then
     echo
-    say "${yellow}----------------------------------------${reset}"
     say "${bold}${yellow}Remotes skipped by --remote:${reset}"
     for repo_info in "${repos_with_skipped_remotes[@]}"; do
         repo_path="${repo_info%%|*}"
         remote="${repo_info#*|}"
         printf "  ${yellow}-${reset} ${cyan}%s${reset} ${dim}->${reset} ${magenta}%s${reset}\n" "$repo_path" "$remote"
     done
-    say "${yellow}----------------------------------------${reset}"
 fi

@@ -30,6 +30,32 @@ ask() {
     printf "%b" "$*" >/dev/tty
 }
 
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [--remote REMOTE]...
+
+Options:
+  --remote REMOTE  Only check this remote. Can be repeated.
+  -h, --help                 Show this help.
+EOF
+}
+
+remote_is_selected() {
+    local selected_remote
+
+    if [ ${#selected_remotes[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    for selected_remote in "${selected_remotes[@]}"; do
+        if [ "$1" = "$selected_remote" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 latest_change_date() {
     local latest_timestamp
 
@@ -56,8 +82,33 @@ latest_change_date() {
     fi
 }
 
+declare -a selected_remotes
+declare -a repos_with_skipped_remotes
 declare -a repos_with_unstaged_changes
 
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --remote)
+            if [ -z "${2:-}" ]; then
+                say "${yellow}Error:${reset} --remote requires a remote name"
+                exit 2
+            fi
+            selected_remotes+=("$2")
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            say "${yellow}Error:${reset} unknown argument: $1"
+            usage
+            exit 2
+            ;;
+    esac
+done
+
+# The script lives in a git-sync directory, so scan its parent for sibling repos.
 while IFS= read -r -d '' repo; do
     repo_dir=$(dirname "$repo")
     cd "$repo_dir" || exit
@@ -80,6 +131,11 @@ while IFS= read -r -d '' repo; do
     fi
 
     for remote in $(git remote); do
+        if ! remote_is_selected "$remote"; then
+            repos_with_skipped_remotes+=("$repo_dir|$remote")
+            continue
+        fi
+
         if ! git show-ref --verify --quiet "refs/remotes/$remote/$branch"; then
             ask "${yellow}Remote${reset} ${magenta}$remote${reset} has no ${bold}$branch${reset} branch. ${bold}Push and create it?${reset} [y/N] "
             read -r answer </dev/tty
@@ -106,7 +162,6 @@ while IFS= read -r -d '' repo; do
     done
 
     cd "$parent_dir" || exit
-# The script lives in a git-sync directory, so scan its parent for sibling repos.
 done < <(find -L "$parent_dir" -type d -name '.git' -print0)
 
 if [ ${#repos_with_unstaged_changes[@]} -gt 0 ]; then
@@ -121,6 +176,18 @@ if [ ${#repos_with_unstaged_changes[@]} -gt 0 ]; then
         else
             printf "  ${yellow}-${reset} ${cyan}%s${reset} ${dim}(no date available)${reset}\n" "$repo_path"
         fi
+    done
+    say "${yellow}----------------------------------------${reset}"
+fi
+
+if [ ${#repos_with_skipped_remotes[@]} -gt 0 ]; then
+    echo
+    say "${yellow}----------------------------------------${reset}"
+    say "${bold}${yellow}Remotes skipped by --remote:${reset}"
+    for repo_info in "${repos_with_skipped_remotes[@]}"; do
+        repo_path="${repo_info%%|*}"
+        remote="${repo_info#*|}"
+        printf "  ${yellow}-${reset} ${cyan}%s${reset} ${dim}->${reset} ${magenta}%s${reset}\n" "$repo_path" "$remote"
     done
     say "${yellow}----------------------------------------${reset}"
 fi

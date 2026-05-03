@@ -30,6 +30,33 @@ ask() {
     printf "%b" "$*" >/dev/tty
 }
 
+confirm() {
+    local prompt_text=$1
+    local default_answer=$2
+    local answer
+    local choices
+
+    case "$default_answer" in
+        yes) choices="[Y/n]" ;;
+        no) choices="[y/N]" ;;
+        *)
+            say "${yellow}Error:${reset} invalid default answer: $default_answer"
+            exit 1
+            ;;
+    esac
+
+    while true; do
+        ask "$prompt_text $choices "
+        read -r answer </dev/tty
+        case "$answer" in
+            "") [ "$default_answer" = "yes" ]; return ;;
+            [Yy]) return 0 ;;
+            [Nn]) return 1 ;;
+            *) ask "${yellow}Please answer y or n.${reset}\n" ;;
+        esac
+    done
+}
+
 usage() {
     cat <<EOF
 Usage: $(basename "$0") [--remote REMOTE]...
@@ -137,9 +164,7 @@ while IFS= read -r -d '' repo; do
         fi
 
         if ! git show-ref --verify --quiet "refs/remotes/$remote/$branch"; then
-            ask "${yellow}Remote${reset} ${magenta}$remote${reset} has no ${bold}$branch${reset} branch. ${bold}Push and create it?${reset} [y/N] "
-            read -r answer </dev/tty
-            if [[ $answer =~ ^[Yy]$ ]]; then
+            if confirm "${yellow}Remote${reset} ${magenta}$remote${reset} has no ${bold}$branch${reset} branch. ${bold}Push and create it?${reset}" no; then
                 git push "$remote" "$branch"
             else
                 say "${dim}Skipping push to ${magenta}$remote/$branch${reset}"
@@ -151,12 +176,10 @@ while IFS= read -r -d '' repo; do
         if [ "$ahead" -ne 0 ]; then
             say "${bold}$branch${reset} at ${cyan}$repo_dir${reset} is ${bold}$ahead${reset} commit(s) ahead of ${magenta}$remote/$branch${reset}"
 
-            ask "${bold}Push changes to${reset} ${magenta}$remote/$branch${reset}? [Y/n] "
-            read -r answer </dev/tty
-            if [[ $answer =~ ^[Nn]$ ]]; then
-                say "${dim}Skipping push to ${magenta}$remote/$branch${reset}"
-            else
+            if confirm "${bold}Push changes to${reset} ${magenta}$remote/$branch${reset}?" yes; then
                 git push "$remote" "$branch"
+            else
+                say "${dim}Skipping push to ${magenta}$remote/$branch${reset}"
             fi
         fi
     done

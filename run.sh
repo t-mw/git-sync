@@ -157,7 +157,24 @@ while IFS= read -r -d '' repo; do
         continue
     fi
 
-    for remote in $(git remote); do
+    remotes=()
+    while IFS= read -r remote; do
+        remotes+=("$remote")
+    done < <(git remote)
+
+    if [ ${#remotes[@]} -eq 0 ]; then
+        say "${yellow}Warning:${reset} no remotes configured in ${cyan}$repo_dir${reset}"
+    fi
+
+    if [ ${#selected_remotes[@]} -gt 0 ] && [ ${#remotes[@]} -gt 0 ]; then
+        for selected_remote in "${selected_remotes[@]}"; do
+            if ! git remote get-url "$selected_remote" >/dev/null 2>&1; then
+                say "${yellow}Warning:${reset} remote ${magenta}$selected_remote${reset} is not configured in ${cyan}$repo_dir${reset}"
+            fi
+        done
+    fi
+
+    for remote in "${remotes[@]}"; do
         if ! remote_is_selected "$remote"; then
             repos_with_skipped_remotes+=("$repo_dir|$remote")
             continue

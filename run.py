@@ -118,6 +118,36 @@ def find_git_dirs(parent_dir):
             dirs.remove(".git")
 
 
+def push_branch_if_needed(repo_dir, remote, branch):
+    remote_branch_exists = git_ok(["show-ref", "--verify", "--quiet", f"refs/remotes/{remote}/{branch}"], repo_dir)
+    if not remote_branch_exists:
+        if confirm(
+            f"{YELLOW}Remote{RESET} {MAGENTA}{remote}{RESET} has no "
+            f"{BOLD}{branch}{RESET} branch. {BOLD}Push and create it?{RESET}",
+            "no",
+        ):
+            run_git(["push", remote, branch], repo_dir, capture=False)
+            return True
+
+        print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
+        return False
+
+    ahead = int(run_git(["rev-list", "--count", f"{remote}/{branch}..{branch}"], repo_dir).stdout.strip())
+    if ahead == 0:
+        return False
+
+    print(
+        f"{BOLD}{branch}{RESET} at {CYAN}{repo_dir}{RESET} is "
+        f"{BOLD}{ahead}{RESET} commit(s) ahead of {MAGENTA}{remote}/{branch}{RESET}"
+    )
+    if confirm(f"{BOLD}Push changes to{RESET} {MAGENTA}{remote}/{branch}{RESET}?", "yes"):
+        run_git(["push", remote, branch], repo_dir, capture=False)
+        return True
+
+    print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
+    return False
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog=Path(argv[0]).name,
@@ -131,7 +161,15 @@ def parse_args(argv):
         metavar="REMOTE",
         help="Only check this remote. Can be repeated.",
     )
-    return parser.parse_args(argv[1:])
+    parser.add_argument(
+        "--tags",
+        action="store_true",
+        help="With --remote, push tags after a branch is pushed to that remote.",
+    )
+    args = parser.parse_args(argv[1:])
+    if args.tags and not args.selected_remotes:
+        parser.error("--tags requires at least one --remote")
+    return args
 
 
 def main(argv):
@@ -181,28 +219,9 @@ def main(argv):
                 repos_with_skipped_remotes.append((repo_dir, remote))
                 continue
 
-            if not git_ok(["show-ref", "--verify", "--quiet", f"refs/remotes/{remote}/{branch}"], repo_dir):
-                if confirm(
-                    f"{YELLOW}Remote{RESET} {MAGENTA}{remote}{RESET} has no "
-                    f"{BOLD}{branch}{RESET} branch. {BOLD}Push and create it?{RESET}",
-                    "no",
-                ):
-                    run_git(["push", remote, branch], repo_dir, capture=False)
-                else:
-                    print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
-                continue
-
-            ahead = int(run_git(["rev-list", "--count", f"{remote}/{branch}..{branch}"], repo_dir).stdout.strip())
-            if ahead != 0:
-                print(
-                    f"{BOLD}{branch}{RESET} at {CYAN}{repo_dir}{RESET} is "
-                    f"{BOLD}{ahead}{RESET} commit(s) ahead of {MAGENTA}{remote}/{branch}{RESET}"
-                )
-
-                if confirm(f"{BOLD}Push changes to{RESET} {MAGENTA}{remote}/{branch}{RESET}?", "yes"):
-                    run_git(["push", remote, branch], repo_dir, capture=False)
-                else:
-                    print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
+            pushed_branch = push_branch_if_needed(repo_dir, remote, branch)
+            if args.tags and pushed_branch and run_git(["tag", "--list"], repo_dir).stdout.strip():
+                run_git(["push", "--tags", remote], repo_dir, capture=False)
 
     if repos_with_unstaged_changes:
         print()

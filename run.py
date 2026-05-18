@@ -64,6 +64,19 @@ def git_ok(args, cwd):
     return run_git(args, cwd, check=False).returncode == 0
 
 
+def push_git(args, repo_dir):
+    result = run_git(["push", *args], repo_dir, check=False, capture=False)
+    if result.returncode == 0:
+        return True
+
+    print(
+        f"{YELLOW}Warning:{RESET} git push {' '.join(args)} failed in "
+        f"{CYAN}{repo_dir}{RESET}; continuing",
+        file=sys.stderr,
+    )
+    return False
+
+
 def status_paths(repo_dir):
     # Use NUL-delimited porcelain output so filenames with spaces/newlines parse safely.
     result = subprocess.run(
@@ -126,8 +139,7 @@ def push_branch_if_needed(repo_dir, remote, branch):
             f"{BOLD}{branch}{RESET} branch. {BOLD}Push and create it?{RESET}",
             "no",
         ):
-            run_git(["push", remote, branch], repo_dir, capture=False)
-            return True
+            return push_git([remote, branch], repo_dir)
 
         print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
         return False
@@ -141,8 +153,7 @@ def push_branch_if_needed(repo_dir, remote, branch):
         f"{BOLD}{ahead}{RESET} commit(s) ahead of {MAGENTA}{remote}/{branch}{RESET}"
     )
     if confirm(f"{BOLD}Push changes to{RESET} {MAGENTA}{remote}/{branch}{RESET}?", "yes"):
-        run_git(["push", remote, branch], repo_dir, capture=False)
-        return True
+        return push_git([remote, branch], repo_dir)
 
     print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
     return False
@@ -221,7 +232,7 @@ def main(argv):
 
             pushed_branch = push_branch_if_needed(repo_dir, remote, branch)
             if args.tags and pushed_branch and run_git(["tag", "--list"], repo_dir).stdout.strip():
-                run_git(["push", "--tags", remote], repo_dir, capture=False)
+                push_git(["--tags", remote], repo_dir)
 
     if repos_with_unstaged_changes:
         print()

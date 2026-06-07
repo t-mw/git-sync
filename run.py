@@ -18,11 +18,19 @@ RESET = "\033[0m" if USE_COLOR else ""
 
 
 def ask(message):
-    # Read from the controlling terminal so prompts still work if stdout is piped.
-    with open("/dev/tty", "r+") as tty:
-        tty.write(message)
-        tty.flush()
-        return tty.readline().strip()
+    if sys.stdin.isatty():
+        return input(message).strip()
+
+    # Read from the controlling terminal so prompts still work if stdin is piped.
+    # Open read/write streams separately: some terminal devices are not seekable and
+    # fail when Python opens them as an updating text stream ("r+").
+    try:
+        with open("/dev/tty", "w") as tty_out, open("/dev/tty", "r") as tty_in:
+            tty_out.write(message)
+            tty_out.flush()
+            return tty_in.readline().strip()
+    except OSError as error:
+        raise RuntimeError(f"cannot prompt without a controlling terminal: {error}") from error
 
 
 def confirm(prompt_text, default_answer):

@@ -147,24 +147,24 @@ def push_branch_if_needed(repo_dir, remote, branch):
             f"{BOLD}{branch}{RESET} branch. {BOLD}Push and create it?{RESET}",
             "no",
         ):
-            return push_git([remote, branch], repo_dir)
+            return push_git([remote, branch], repo_dir), True
 
         print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
-        return False
+        return False, True
 
     ahead = int(run_git(["rev-list", "--count", f"{remote}/{branch}..{branch}"], repo_dir).stdout.strip())
     if ahead == 0:
-        return False
+        return False, False
 
     print(
         f"{BOLD}{branch}{RESET} at {CYAN}{repo_dir}{RESET} is "
         f"{BOLD}{ahead}{RESET} commit(s) ahead of {MAGENTA}{remote}/{branch}{RESET}"
     )
     if confirm(f"{BOLD}Push changes to{RESET} {MAGENTA}{remote}/{branch}{RESET}?", "yes"):
-        return push_git([remote, branch], repo_dir)
+        return push_git([remote, branch], repo_dir), True
 
     print(f"{DIM}Skipping push to {MAGENTA}{remote}/{branch}{RESET}")
-    return False
+    return False, True
 
 
 def parse_args(argv):
@@ -222,25 +222,24 @@ def main(argv):
         remotes_output = run_git(["remote"], repo_dir).stdout
         remotes = [line for line in remotes_output.splitlines() if line]
 
-        if not remotes:
-            print(f"{YELLOW}Warning:{RESET} no remotes configured in {CYAN}{repo_dir}{RESET}")
-
-        if args.selected_remotes and remotes:
-            for selected_remote in args.selected_remotes:
-                if not git_ok(["remote", "get-url", selected_remote], repo_dir):
-                    print(
-                        f"{YELLOW}Warning:{RESET} remote {MAGENTA}{selected_remote}{RESET} "
-                        f"is not configured in {CYAN}{repo_dir}{RESET}"
-                    )
-
+        prompted_to_push = False
         for remote in remotes:
             if args.selected_remotes and remote not in args.selected_remotes:
                 repos_with_skipped_remotes.append((repo_dir, remote))
                 continue
 
-            pushed_branch = push_branch_if_needed(repo_dir, remote, branch)
+            pushed_branch, prompted = push_branch_if_needed(repo_dir, remote, branch)
+            prompted_to_push = prompted_to_push or prompted
             if args.tags and pushed_branch and run_git(["tag", "--list"], repo_dir).stdout.strip():
                 push_git(["--tags", remote], repo_dir)
+
+        if prompted_to_push:
+            for remote in args.selected_remotes:
+                if remote not in remotes:
+                    print(
+                        f"{YELLOW}Warning:{RESET} remote {MAGENTA}{remote}{RESET} "
+                        f"is not configured in {CYAN}{repo_dir}{RESET}"
+                    )
 
     if repos_with_unstaged_changes:
         print()
